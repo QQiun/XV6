@@ -3,28 +3,26 @@
 #include "user/user.h"
 #include "kernel/fs.h"
 
-char* fmtname(char* path)
+void fmtname(char* path, char* file)
 {
-    static char buf[DIRSIZ + 1];
-    char*       p;
+    char* p;
 
     // Find first character after last slash.
-    for (p = path + strlen(path); p >= path && *p != '/'; p--) {
+    for (p = path + strlen(path); p >= path && *p != '/'; --p) {
     }
-    p++;
+    ++p;
 
-    // Return blank-padded name.
-    if (strlen(p) >= DIRSIZ) {
-        return p;
+    if (strcmp(p, file) == 0) {
+        printf("%s\n", path);
     }
-
-    memmove(buf, p, strlen(p));
-    memset(buf + strlen(p), ' ', DIRSIZ - strlen(p));
-    return buf;
 }
 
-void ls(char* path)
+void find(char* path, char* file)
 {
+    if (strcmp(path, "..") == 0) {
+        return;
+    }
+
     char          buf[512], *p;
     int           fd;
     struct dirent de;
@@ -43,7 +41,7 @@ void ls(char* path)
 
     switch (st.type) {
     case T_FILE:
-        printf("%s %d %d %l\n", fmtname(path), st.type, st.ino, st.size);
+        fmtname(path, file);
         break;
 
     case T_DIR:
@@ -55,15 +53,26 @@ void ls(char* path)
         p = buf + strlen(buf);
         *p++ = '/';
         while (read(fd, &de, sizeof(de)) == sizeof(de)) {
-            if (de.inum == 0)
+            if (de.inum == 0) {
                 continue;
+            }
             memmove(p, de.name, DIRSIZ);
+
+            if (strcmp(de.name, ".") == 0 || strcmp(de.name, "..") == 0) {
+                continue;
+            }
+
             p[DIRSIZ] = 0;
             if (stat(buf, &st) < 0) {
                 printf("ls: cannot stat %s\n", buf);
                 continue;
             }
-            printf("%s %d %d %d\n", fmtname(buf), st.type, st.ino, st.size);
+
+            if (st.type == T_DIR) {
+                find(buf, file);
+            } else {
+                fmtname(buf, file);
+            }
         }
         break;
     }
@@ -73,15 +82,20 @@ void ls(char* path)
 
 int main(int argc, char* argv[])
 {
-    int i;
-
+    char* path;
+    char* file;
     if (argc < 2) {
-        ls(".");
+        printf("Usage: find <path> <file> or find <file>\n");
         exit(0);
+    } else if (argc == 2) {
+        path = ".";
+        file = argv[1];
+    } else {
+        path = argv[1];
+        file = argv[2];
     }
 
-    for (i = 1; i < argc; i++) {
-        ls(argv[i]);
-    }
+    find(path, file);
+
     exit(0);
 }
